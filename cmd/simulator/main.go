@@ -28,9 +28,23 @@ type LoginReq struct {
 	Password string `json:"password"`
 }
 
+type RegisterRes struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		ID       string `json:"id"`
+		Username string `json:"username"`
+		Role     string `json:"role"`
+	} `json:"data"`
+}
+
 type LoginRes struct {
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+	Data    struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	} `json:"data"`
 }
 
 type OrderReq struct {
@@ -40,9 +54,11 @@ type OrderReq struct {
 }
 
 type OrderRes struct {
-	OrderID string `json:"order_id"`
 	Success bool   `json:"success"`
 	Message string `json:"message"`
+	Data    struct {
+		OrderID string `json:"order_id"`
+	} `json:"data"`
 }
 
 func main() {
@@ -86,7 +102,7 @@ func main() {
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	_ = json.Unmarshal(bodyBytes, &loginRes)
 
-	if loginRes.AccessToken == "" {
+	if loginRes.Data.AccessToken == "" {
 		log.Fatalf("failed to retrieve JWT access token: %s", string(bodyBytes))
 	}
 	log.Println("JWT Authentication Successful!")
@@ -132,7 +148,7 @@ func main() {
 					continue
 				}
 				req.Header.Set("Content-Type", "application/json")
-				req.Header.Set("Authorization", "Bearer "+loginRes.AccessToken)
+				req.Header.Set("Authorization", "Bearer "+loginRes.Data.AccessToken)
 
 				res, err := client.Do(req)
 				if err != nil {

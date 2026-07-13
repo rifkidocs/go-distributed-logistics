@@ -55,6 +55,30 @@ func injectTraceGRPC(ctx context.Context) context.Context {
 	return metadata.NewOutgoingContext(ctx, md)
 }
 
+// APIResponse is the unified best-practice structure for all REST API responses
+type APIResponse struct {
+	Success bool        `json:"success"`
+	Message string      `json:"message"`
+	Data    interface{} `json:"data,omitempty"`
+	Errors  []string    `json:"errors,omitempty"`
+}
+
+func SendSuccess(c *gin.Context, statusCode int, message string, data interface{}) {
+	c.JSON(statusCode, APIResponse{
+		Success: true,
+		Message: message,
+		Data:    data,
+	})
+}
+
+func SendError(c *gin.Context, statusCode int, message string, errs ...string) {
+	c.JSON(statusCode, APIResponse{
+		Success: false,
+		Message: message,
+		Errors:  errs,
+	})
+}
+
 func main() {
 	cfg := config.LoadConfig()
 
@@ -106,13 +130,13 @@ func main() {
 			Role     string `json:"role" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			SendError(c, http.StatusBadRequest, "Invalid request payload", err.Error())
 			return
 		}
 
 		hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to hash password"})
+			SendError(c, http.StatusInternalServerError, "Failed to process request")
 			return
 		}
 
@@ -122,11 +146,11 @@ func main() {
 			Role:         req.Role,
 		})
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "username already exists or invalid payload"})
+			SendError(c, http.StatusBadRequest, "Registration failed", "Username already exists or database error")
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{
+		SendSuccess(c, http.StatusCreated, "User registered successfully", gin.H{
 			"id":       user.ID.String(),
 			"username": user.Username,
 			"role":     user.Role,
@@ -139,28 +163,28 @@ func main() {
 			Password string `json:"password" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			SendError(c, http.StatusBadRequest, "Invalid login payload", err.Error())
 			return
 		}
 
 		user, err := queries.GetUserByUsername(c.Request.Context(), req.Username)
 		if err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+			SendError(c, http.StatusUnauthorized, "Invalid credentials", "Invalid username or password")
 			return
 		}
 
 		if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(req.Password)); err != nil {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid username or password"})
+			SendError(c, http.StatusUnauthorized, "Invalid credentials", "Invalid username or password")
 			return
 		}
 
 		accessToken, refreshToken, err := authMid.GenerateTokens(user.ID.String(), user.Role)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate tokens"})
+			SendError(c, http.StatusInternalServerError, "Failed to authenticate user")
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		SendSuccess(c, http.StatusOK, "Authentication successful", gin.H{
 			"access_token":  accessToken,
 			"refresh_token": refreshToken,
 		})
@@ -181,13 +205,12 @@ func main() {
 			Destination string `json:"destination" binding:"required"`
 		}
 		if err := c.ShouldBindJSON(&req); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			SendError(c, http.StatusBadRequest, "Invalid order request", err.Error())
 			return
 		}
 
 		orderID := uuid.New().String()
 
-		// Call Inventory gRPC service with trace context
 		gRPCCtx := injectTraceGRPC(ctx)
 		res, err := inventoryClient.ReserveStock(gRPCCtx, &pbInventory.ReserveStockRequest{
 			ItemId:      req.ItemID,
@@ -196,23 +219,17 @@ func main() {
 			Destination: req.Destination,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			SendError(c, http.StatusInternalServerError, "Inventory communication error", err.Error())
 			return
 		}
 
 		if !res.Success {
-			c.JSON(http.StatusConflict, gin.H{
-				"order_id": orderID,
-				"success":  false,
-				"message":  res.Message,
-			})
+			SendError(c, http.StatusConflict, "Order placement rejected", res.Message)
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		SendSuccess(c, http.StatusOK, "Order placed successfully", gin.H{
 			"order_id": orderID,
-			"success":  true,
-			"message":  "order placed, shipment planning in progress",
 		})
 	})
 
@@ -228,11 +245,11 @@ func main() {
 			ShipmentId: shipmentID,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			SendError(c, http.StatusInternalServerError, "Logistics communication error", err.Error())
 			return
 		}
 
-		c.JSON(http.StatusOK, gin.H{
+		SendSuccess(c, http.StatusOK, "Shipment details retrieved", gin.H{
 			"shipment_id":     res.ShipmentId,
 			"status":          res.Status,
 			"carrier":         res.Carrier,
