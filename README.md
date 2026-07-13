@@ -87,15 +87,22 @@ Open three separate terminal windows/sessions and run the services in order:
 ## Testing & Verifying Flows
 
 ### Run the Load Simulator
-We have built a simulator script to test registration, login, and high-concurrency ordering. Run:
+We have built an upgraded load simulator script to test registration, login, and high-concurrency ordering. Run:
 ```bash
-go run cmd/simulator/main.go
+go run cmd/simulator/main.go -r 1000 -c 50
 ```
 
-The simulator will attempt to place 10 orders of 15 MacBook units concurrently. Since the initial stock is 100:
-- **Exactly 6 orders** will succeed.
-- **4 orders** will fail with `insufficient stock`.
-- This verifies the **Redis Lock** is successfully preventing stock overselling (race conditions).
+#### Available Flags:
+- `-r`: Total number of order requests to send (default: `100`).
+- `-c`: Number of concurrent workers (default: `10`).
+
+The simulator will execute the requests concurrently and output detailed telemetry directly in your terminal, showing:
+- **Total Time Elapsed**
+- **Successful vs Failed/OutOfStock Orders**
+- **Average Latency (Response Time in ms)**
+- **Requests Per Second (RPS)**
+
+This verifies the **Redis Lock** is successfully preventing stock overselling (race conditions) under high load while maintaining low response times.
 
 ---
 
