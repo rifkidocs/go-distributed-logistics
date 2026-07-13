@@ -14,6 +14,10 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
+
+	_ "github.com/rifkidocs/go-distributed-logistics/docs"
 	pbInventory "github.com/rifkidocs/go-distributed-logistics/api/inventory"
 	pbLogistics "github.com/rifkidocs/go-distributed-logistics/api/logistics"
 	"github.com/rifkidocs/go-distributed-logistics/internal/config"
@@ -79,6 +83,43 @@ func SendError(c *gin.Context, statusCode int, message string, errs ...string) {
 	})
 }
 
+type RegisterInput struct {
+	Username string `json:"username" binding:"required" example:"john_doe"`
+	Password string `json:"password" binding:"required" example:"securepass123"`
+	Role     string `json:"role" binding:"required" example:"staff"`
+}
+
+type LoginInput struct {
+	Username string `json:"username" binding:"required" example:"john_doe"`
+	Password string `json:"password" binding:"required" example:"securepass123"`
+}
+
+type OrderInput struct {
+	ItemID      string `json:"item_id" binding:"required" example:"11111111-1111-1111-1111-111111111111"`
+	Quantity    int32  `json:"quantity" binding:"required" example:"1"`
+	Destination string `json:"destination" binding:"required" example:"Jakarta Warehouse"`
+}
+
+// @title Distributed Warehouse & Logistics API
+// @version 1.0
+// @description High-performance distributed warehouse and logistics microservices gateway.
+// @termsOfService http://swagger.io/terms/
+
+// @contact.name API Support
+// @contact.url http://www.swagger.io/support
+// @contact.email support@swagger.io
+
+// @license.name Apache 2.0
+// @license.url http://www.apache.org/licenses/LICENSE-2.0.html
+
+// @host localhost:8080
+// @BasePath /
+// @query.collection.format multi
+
+// @securityDefinitions.apikey BearerAuth
+// @in header
+// @name Authorization
+// @description Input authorization token with format "Bearer <JWT_TOKEN>"
 func main() {
 	cfg := config.LoadConfig()
 
@@ -122,13 +163,38 @@ func main() {
 
 	r := gin.Default()
 
+	// Swagger documentation endpoint
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
+
 	// Public Routes
-	r.POST("/register", func(c *gin.Context) {
-		var req struct {
-			Username string `json:"username" binding:"required"`
-			Password string `json:"password" binding:"required"`
-			Role     string `json:"role" binding:"required"`
-		}
+	r.POST("/register", RegisterHandler(queries))
+	r.POST("/login", LoginHandler(queries, authMid))
+
+	// Protected Routes
+	protected := r.Group("/")
+	protected.Use(authMid.Authenticate())
+
+	protected.POST("/order", PlaceOrderHandler(inventoryClient))
+	protected.GET("/shipments/:id", GetShipmentStatusHandler(logisticsClient))
+
+	log.Printf("API Gateway listening on HTTP port %s", cfg.GatewayPort)
+	r.Run(":" + cfg.GatewayPort)
+}
+
+// RegisterHandler registers a new user
+// @Summary Register a new user
+// @Description Create a user credentials and database entry with staff/admin role
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param input body RegisterInput true "Registration credentials"
+// @Success 201 {object} APIResponse "Registration Successful"
+// @Failure 400 {object} APIResponse "Invalid input or username exists"
+// @Failure 500 {object} APIResponse "Internal server error"
+// @Router /register [post]
+func RegisterHandler(queries inventorydb.Querier) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req RegisterInput
 		if err := c.ShouldBindJSON(&req); err != nil {
 			SendError(c, http.StatusBadRequest, "Invalid request payload", err.Error())
 			return
@@ -155,13 +221,24 @@ func main() {
 			"username": user.Username,
 			"role":     user.Role,
 		})
-	})
+	}
+}
 
-	r.POST("/login", func(c *gin.Context) {
-		var req struct {
-			Username string `json:"username" binding:"required"`
-			Password string `json:"password" binding:"required"`
-		}
+// LoginHandler authenticates the user
+// @Summary Log in to retrieve JWT access tokens
+// @Description Logs user in using standard username/password and retrieves JWT tokens
+// @Tags Authentication
+// @Accept json
+// @Produce json
+// @Param input body LoginInput true "Login credentials"
+// @Success 200 {object} APIResponse "Authentication Successful"
+// @Failure 400 {object} APIResponse "Invalid input format"
+// @Failure 401 {object} APIResponse "Unauthorized - invalid credentials"
+// @Failure 500 {object} APIResponse "Internal server error"
+// @Router /login [post]
+func LoginHandler(queries inventorydb.Querier, authMid *middleware.AuthMiddleware) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req LoginInput
 		if err := c.ShouldBindJSON(&req); err != nil {
 			SendError(c, http.StatusBadRequest, "Invalid login payload", err.Error())
 			return
@@ -188,22 +265,30 @@ func main() {
 			"access_token":  accessToken,
 			"refresh_token": refreshToken,
 		})
-	})
+	}
+}
 
-	// Protected Routes
-	protected := r.Group("/")
-	protected.Use(authMid.Authenticate())
-
-	protected.POST("/order", func(c *gin.Context) {
+// PlaceOrderHandler reserves inventory stock
+// @Summary Place a warehouse order
+// @Description Locks and reserves stock for item ID and triggers logistics lifecycle asynchronously
+// @Tags Orders
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Insert JWT Bearer token" default(Bearer <JWT>)
+// @Param input body OrderInput true "Order placement attributes"
+// @Security BearerAuth
+// @Success 200 {object} APIResponse "Order placed successfully"
+// @Failure 400 {object} APIResponse "Invalid order format"
+// @Failure 409 {object} APIResponse "Stock conflict / Out of stock"
+// @Failure 500 {object} APIResponse "gRPC internal error"
+// @Router /order [post]
+func PlaceOrderHandler(inventoryClient pbInventory.InventoryServiceClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		tr := otel.Tracer("api-gateway")
 		ctx, span := tr.Start(c.Request.Context(), "PlaceOrderHandler")
 		defer span.End()
 
-		var req struct {
-			ItemID      string `json:"item_id" binding:"required"`
-			Quantity    int32  `json:"quantity" binding:"required"`
-			Destination string `json:"destination" binding:"required"`
-		}
+		var req OrderInput
 		if err := c.ShouldBindJSON(&req); err != nil {
 			SendError(c, http.StatusBadRequest, "Invalid order request", err.Error())
 			return
@@ -231,9 +316,23 @@ func main() {
 		SendSuccess(c, http.StatusOK, "Order placed successfully", gin.H{
 			"order_id": orderID,
 		})
-	})
+	}
+}
 
-	protected.GET("/shipments/:id", func(c *gin.Context) {
+// GetShipmentStatusHandler checks delivery status
+// @Summary Get status of a shipment
+// @Description Retrieves active status, carrier, and tracking number for shipment ID
+// @Tags Logistics
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Insert JWT Bearer token" default(Bearer <JWT>)
+// @Param id path string true "Shipment ID (UUID)"
+// @Security BearerAuth
+// @Success 200 {object} APIResponse "Shipment details fetched"
+// @Failure 500 {object} APIResponse "gRPC internal error"
+// @Router /shipments/{id} [get]
+func GetShipmentStatusHandler(logisticsClient pbLogistics.LogisticsServiceClient) gin.HandlerFunc {
+	return func(c *gin.Context) {
 		tr := otel.Tracer("api-gateway")
 		ctx, span := tr.Start(c.Request.Context(), "GetShipmentStatusHandler")
 		defer span.End()
@@ -255,8 +354,5 @@ func main() {
 			"carrier":         res.Carrier,
 			"tracking_number": res.TrackingNumber,
 		})
-	})
-
-	log.Printf("API Gateway listening on HTTP port %s", cfg.GatewayPort)
-	r.Run(":" + cfg.GatewayPort)
+	}
 }
