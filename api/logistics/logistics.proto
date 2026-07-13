@@ -1,0 +1,45 @@
+syntax = "proto3";
+
+package logistics;
+
+option go_package = "github.com/yourusername/project-backend-go/api/logistics;logistics";
+
+service LogisticsService {
+  rpc CreateShipment(CreateShipmentRequest) returns (CreateShipmentResponse);
+  rpc GetShipmentStatus(GetShipmentStatusRequest) returns (GetShipmentStatusResponse);
+  rpc UpdateShipmentStatus(UpdateShipmentStatusRequest) returns (UpdateShipmentStatusResponse);
+}
+
+message CreateShipmentRequest {
+  string order_id = 1;
+  string item_id = 2;
+  int32 quantity = 3;
+  string destination = 4;
+}
+
+message CreateShipmentResponse {
+  string shipment_id = 1;
+  string status = 2;
+  string message = 3;
+}
+
+message GetShipmentStatusRequest {
+  string shipment_id = 1;
+}
+
+message GetShipmentStatusResponse {
+  string shipment_id = 1;
+  string status = 2;
+  string carrier = 3;
+  string tracking_number = 4;
+}
+
+message UpdateShipmentStatusRequest {
+  string shipment_id = 1;
+  string status = 2;
+}
+
+message UpdateShipmentStatusResponse {
+  bool success = 1;
+  string message = 2;
+}
