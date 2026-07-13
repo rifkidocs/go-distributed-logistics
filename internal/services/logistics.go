@@ -21,6 +21,7 @@ type LogisticsService struct {
 	queries logisticsdb.Querier
 }
 
+// NewLogisticsService menginisialisasi instance baru dari LogisticsService.
 func NewLogisticsService(db *sql.DB) *LogisticsService {
 	return &LogisticsService{
 		db:      db,
@@ -28,6 +29,7 @@ func NewLogisticsService(db *sql.DB) *LogisticsService {
 	}
 }
 
+// CreateShipment membuat data pengiriman baru dengan status awal PENDING.
 func (s *LogisticsService) CreateShipment(ctx context.Context, req *pb.CreateShipmentRequest) (*pb.CreateShipmentResponse, error) {
 	tr := otel.Tracer("logistics-service")
 	ctx, span := tr.Start(ctx, "CreateShipment")
@@ -60,6 +62,7 @@ func (s *LogisticsService) CreateShipment(ctx context.Context, req *pb.CreateShi
 	}, nil
 }
 
+// GetShipmentStatus mengambil status terkini dari pengiriman beserta informasi kurir & nomor resi.
 func (s *LogisticsService) GetShipmentStatus(ctx context.Context, req *pb.GetShipmentStatusRequest) (*pb.GetShipmentStatusResponse, error) {
 	tr := otel.Tracer("logistics-service")
 	ctx, span := tr.Start(ctx, "GetShipmentStatus")
@@ -86,6 +89,7 @@ func (s *LogisticsService) GetShipmentStatus(ctx context.Context, req *pb.GetShi
 	}, nil
 }
 
+// UpdateShipmentStatus memperbarui status perjalanan dari pengiriman tertentu.
 func (s *LogisticsService) UpdateShipmentStatus(ctx context.Context, req *pb.UpdateShipmentStatusRequest) (*pb.UpdateShipmentStatusResponse, error) {
 	tr := otel.Tracer("logistics-service")
 	ctx, span := tr.Start(ctx, "UpdateShipmentStatus")
@@ -110,7 +114,7 @@ func (s *LogisticsService) UpdateShipmentStatus(ctx context.Context, req *pb.Upd
 	}, nil
 }
 
-// AssignCarrier performs assigning carrier details to shipment
+// AssignCarrier mendaftarkan kurir dan nomor resi pengiriman ke database logistik.
 func (s *LogisticsService) AssignCarrier(ctx context.Context, shipmentID uuid.UUID, carrier string, trackingNum string) error {
 	_, err := s.queries.AssignCarrier(ctx, logisticsdb.AssignCarrierParams{
 		ID:             shipmentID,

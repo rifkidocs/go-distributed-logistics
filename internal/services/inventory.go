@@ -30,6 +30,7 @@ type InventoryService struct {
 	jsMgr    *event.JetStreamManager
 }
 
+// NewInventoryService menginisialisasi instance baru dari InventoryService.
 func NewInventoryService(db *sql.DB, redisCl *redis.Client, rsync *redsync.Redsync, jsMgr *event.JetStreamManager) *InventoryService {
 	return &InventoryService{
 		db:      db,
@@ -40,6 +41,7 @@ func NewInventoryService(db *sql.DB, redisCl *redis.Client, rsync *redsync.Redsy
 	}
 }
 
+// CheckStock memeriksa jumlah ketersediaan stok barang tertentu di gudang.
 func (s *InventoryService) CheckStock(ctx context.Context, req *pb.CheckStockRequest) (*pb.CheckStockResponse, error) {
 	tr := otel.Tracer("inventory-service")
 	ctx, span := tr.Start(ctx, "CheckStock")
@@ -70,6 +72,7 @@ func (s *InventoryService) CheckStock(ctx context.Context, req *pb.CheckStockReq
 	}, nil
 }
 
+// ReserveStock memesan (mengunci & mengurangi) stok barang untuk sebuah pesanan menggunakan distributed lock Redis.
 func (s *InventoryService) ReserveStock(ctx context.Context, req *pb.ReserveStockRequest) (*pb.ReserveStockResponse, error) {
 	tr := otel.Tracer("inventory-service")
 	ctx, span := tr.Start(ctx, "ReserveStock")
@@ -175,6 +178,7 @@ func (s *InventoryService) ReserveStock(ctx context.Context, req *pb.ReserveStoc
 	}, nil
 }
 
+// ReleaseStock mengembalikan stok barang yang sebelumnya dipesan kembali ke gudang (misal karena pesanan batal).
 func (s *InventoryService) ReleaseStock(ctx context.Context, req *pb.ReleaseStockRequest) (*pb.ReleaseStockResponse, error) {
 	tr := otel.Tracer("inventory-service")
 	ctx, span := tr.Start(ctx, "ReleaseStock")
