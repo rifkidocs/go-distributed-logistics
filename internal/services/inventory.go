@@ -16,9 +16,9 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/yourusername/project-backend-go/api/inventory"
-	inventorydb "github.com/yourusername/project-backend-go/internal/database/inventory"
-	"github.com/yourusername/project-backend-go/internal/event"
+	pb "github.com/rifkidocs/go-distributed-logistics/api/inventory"
+	inventorydb "github.com/rifkidocs/go-distributed-logistics/internal/database/inventory"
+	"github.com/rifkidocs/go-distributed-logistics/internal/event"
 )
 
 type InventoryService struct {

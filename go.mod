@@ -1,4 +1,4 @@
-module github.com/yourusername/project-backend-go
+module github.com/rifkidocs/go-distributed-logistics
 
 go 1.25.5
 

@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package logistics;
 
-option go_package = "github.com/yourusername/project-backend-go/api/logistics;logistics";
+option go_package = "github.com/rifkidocs/go-distributed-logistics/api/logistics;logistics";
 
 service LogisticsService {
   rpc CreateShipment(CreateShipmentRequest) returns (CreateShipmentResponse);

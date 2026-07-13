@@ -14,12 +14,12 @@ import (
 	_ "github.com/lib/pq"
 	"google.golang.org/grpc"
 
-	pb "github.com/yourusername/project-backend-go/api/inventory"
-	"github.com/yourusername/project-backend-go/internal/config"
-	"github.com/yourusername/project-backend-go/internal/database/inventory"
-	"github.com/yourusername/project-backend-go/internal/event"
-	"github.com/yourusername/project-backend-go/internal/services"
-	"github.com/yourusername/project-backend-go/internal/telemetry"
+	pb "github.com/rifkidocs/go-distributed-logistics/api/inventory"
+	"github.com/rifkidocs/go-distributed-logistics/internal/config"
+	"github.com/rifkidocs/go-distributed-logistics/internal/database/inventory"
+	"github.com/rifkidocs/go-distributed-logistics/internal/event"
+	"github.com/rifkidocs/go-distributed-logistics/internal/services"
+	"github.com/rifkidocs/go-distributed-logistics/internal/telemetry"
 )
 
 func main() {

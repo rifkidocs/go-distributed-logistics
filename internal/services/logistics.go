@@ -11,8 +11,8 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	pb "github.com/yourusername/project-backend-go/api/logistics"
-	logisticsdb "github.com/yourusername/project-backend-go/internal/database/logistics"
+	pb "github.com/rifkidocs/go-distributed-logistics/api/logistics"
+	logisticsdb "github.com/rifkidocs/go-distributed-logistics/internal/database/logistics"
 )
 
 type LogisticsService struct {

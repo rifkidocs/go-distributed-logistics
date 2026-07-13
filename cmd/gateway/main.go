@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/metadata"
 
-	pbInventory "github.com/yourusername/project-backend-go/api/inventory"
-	pbLogistics "github.com/yourusername/project-backend-go/api/logistics"
-	"github.com/yourusername/project-backend-go/internal/config"
-	inventorydb "github.com/yourusername/project-backend-go/internal/database/inventory"
-	"github.com/yourusername/project-backend-go/internal/middleware"
-	"github.com/yourusername/project-backend-go/internal/telemetry"
+	pbInventory "github.com/rifkidocs/go-distributed-logistics/api/inventory"
+	pbLogistics "github.com/rifkidocs/go-distributed-logistics/api/logistics"
+	"github.com/rifkidocs/go-distributed-logistics/internal/config"
+	inventorydb "github.com/rifkidocs/go-distributed-logistics/internal/database/inventory"
+	"github.com/rifkidocs/go-distributed-logistics/internal/middleware"
+	"github.com/rifkidocs/go-distributed-logistics/internal/telemetry"
 )
 
 type mdCarrier struct {

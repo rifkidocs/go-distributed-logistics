@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package inventory;
 
-option go_package = "github.com/yourusername/project-backend-go/api/inventory;inventory";
+option go_package = "github.com/rifkidocs/go-distributed-logistics/api/inventory;inventory";
 
 service InventoryService {
   rpc CheckStock(CheckStockRequest) returns (CheckStockResponse);
