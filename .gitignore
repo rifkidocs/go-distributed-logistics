@@ -35,3 +35,6 @@ go.work.sum
 # Task logs
 .system_generated/
 *.log
+
+# Design documents
+docs/
