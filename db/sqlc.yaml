@@ -1,0 +1,25 @@
+version: "2"
+sql:
+  - name: "inventory"
+    queries: "db/queries/inventory.sql"
+    schema: "db/migrations/inventory/000001_init.up.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "inventorydb"
+        out: "internal/database/inventory"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true
+
+  - name: "logistics"
+    queries: "db/queries/logistics.sql"
+    schema: "db/migrations/logistics/000001_init.up.sql"
+    engine: "postgresql"
+    gen:
+      go:
+        package: "logisticsdb"
+        out: "internal/database/logistics"
+        emit_json_tags: true
+        emit_prepared_queries: false
+        emit_interface: true

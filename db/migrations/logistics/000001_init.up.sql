@@ -1,0 +1,12 @@
+CREATE TABLE shipments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    order_id UUID NOT NULL,
+    item_id UUID NOT NULL,
+    quantity INT NOT NULL,
+    destination TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'PENDING', -- 'PENDING', 'ASSIGNED', 'SHIPPED', 'DELIVERED'
+    carrier VARCHAR(100),
+    tracking_number VARCHAR(100),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
