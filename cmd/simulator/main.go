@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -44,7 +46,13 @@ type OrderRes struct {
 }
 
 func main() {
+	// Flags for customization
+	totalRequests := flag.Int("r", 100, "Total number of order requests to send")
+	concurrency := flag.Int("c", 10, "Number of concurrent workers")
+	flag.Parse()
+
 	log.Println("Starting Warehouse & Logistics Load Simulator...")
+	log.Printf("Configuration: Total Requests = %d, Concurrency = %d\n", *totalRequests, *concurrency)
 
 	// 1. Register a test user
 	username := fmt.Sprintf("sim_user_%d", time.Now().Unix())
@@ -83,65 +91,85 @@ func main() {
 	}
 	log.Println("JWT Authentication Successful!")
 
-	// 3. Simulate High Concurrency Order placement
-	// MacBook Pro M3 ID has 100 units in stock.
-	// We make 10 concurrent requests reserving 15 units each (10 * 15 = 150 units requested).
-	// Only 6 should succeed (6 * 15 = 90 units reserved, remaining 10). The rest should fail.
+	// 3. Simulate Concurrency Order placement
 	macbookID := "11111111-1111-1111-1111-111111111111"
-	concurrency := 10
-	unitsPerOrder := 15
-
-	log.Printf("Starting concurrency test: Placing %d orders of MacBook Pro (15 units each) concurrently...", concurrency)
-
+	
 	var wg sync.WaitGroup
-	results := make([]string, concurrency)
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
+
+	// Channel to distribute work
+	jobs := make(chan int, *totalRequests)
+	for i := 0; i < *totalRequests; i++ {
+		jobs <- i
+	}
+	close(jobs)
+
+	var successCount int64
+	var failureCount int64
+	var totalDurationMs int64
 
 	start := time.Now()
-	for i := 0; i < concurrency; i++ {
+
+	// Spawn workers
+	for w := 0; w < *concurrency; w++ {
 		wg.Add(1)
-		go func(index int) {
+		go func(workerID int) {
 			defer wg.Done()
+			for range jobs {
+				orderReq := OrderReq{
+					ItemID:   macbookID,
+					Quantity: 1, // order 1 unit to avoid instant stock drain
+					Destination: fmt.Sprintf("Jakarta Gateway Hub Worker %d", workerID),
+				}
+				orderBytes, _ := json.Marshal(orderReq)
 
-			orderReq := OrderReq{
-				ItemID:      macbookID,
-				Quantity:    unitsPerOrder,
-				Destination: fmt.Sprintf("Jakarta Gateway Hub Zone %d", index+1),
+				reqStart := time.Now()
+				req, err := http.NewRequest("POST", baseURL+"/order", bytes.NewBuffer(orderBytes))
+				if err != nil {
+					atomic.AddInt64(&failureCount, 1)
+					continue
+				}
+				req.Header.Set("Content-Type", "application/json")
+				req.Header.Set("Authorization", "Bearer "+loginRes.AccessToken)
+
+				res, err := client.Do(req)
+				if err != nil {
+					atomic.AddInt64(&failureCount, 1)
+					continue
+				}
+				
+				resBytes, _ := io.ReadAll(res.Body)
+				res.Body.Close()
+
+				duration := time.Since(reqStart).Milliseconds()
+				atomic.AddInt64(&totalDurationMs, duration)
+
+				var orderRes OrderRes
+				_ = json.Unmarshal(resBytes, &orderRes)
+
+				if res.StatusCode == http.StatusOK && orderRes.Success {
+					atomic.AddInt64(&successCount, 1)
+				} else {
+					atomic.AddInt64(&failureCount, 1)
+				}
 			}
-			orderBytes, _ := json.Marshal(orderReq)
-
-			req, _ := http.NewRequest("POST", baseURL+"/order", bytes.NewBuffer(orderBytes))
-			req.Header.Set("Content-Type", "application/json")
-			req.Header.Set("Authorization", "Bearer "+loginRes.AccessToken)
-
-			res, err := client.Do(req)
-			if err != nil {
-				results[index] = fmt.Sprintf("Request %d: Failed with error: %v", index+1, err)
-				return
-			}
-			defer res.Body.Close()
-
-			resBytes, _ := io.ReadAll(res.Body)
-			var orderRes OrderRes
-			_ = json.Unmarshal(resBytes, &orderRes)
-
-			results[index] = fmt.Sprintf("Request %d (Status %d): Success=%t | OrderID=%s | Message=%s",
-				index+1, res.StatusCode, orderRes.Success, orderRes.OrderID, orderRes.Message)
-		}(i)
+		}(w)
 	}
 
 	wg.Wait()
-	duration := time.Since(start)
+	totalTime := time.Since(start)
 
-	log.Println("\n--- Concurrency Test Results ---")
-	successCount := 0
-	for _, res := range results {
-		fmt.Println(res)
-		if bytes.Contains([]byte(res), []byte("Success=true")) {
-			successCount++
-		}
-	}
-	log.Printf("\nConcurrency test completed in %v", duration)
-	log.Printf("Total Successful Reservations: %d/%d (Expect exactly 6)", successCount, concurrency)
-	log.Println("Verify your Jaeger Dashboard (http://localhost:16686) to trace transaction flows!")
+	// Output Results
+	log.Println("\n--- Stress Test Results ---")
+	log.Printf("Total Time Elapsed  : %v\n", totalTime)
+	log.Printf("Total Requests Done : %d\n", *totalRequests)
+	log.Printf("Successful Orders   : %d\n", atomic.LoadInt64(&successCount))
+	log.Printf("Failed/OutOfStock   : %d\n", atomic.LoadInt64(&failureCount))
+
+	avgLatency := float64(atomic.LoadInt64(&totalDurationMs)) / float64(*totalRequests)
+	log.Printf("Average Latency     : %.2f ms\n", avgLatency)
+	log.Printf("Requests / Second   : %.2f RPS\n", float64(*totalRequests)/totalTime.Seconds())
+	log.Println("\nTip: Check Jaeger Dashboard (http://localhost:16686) for detailed request flows!")
 }
