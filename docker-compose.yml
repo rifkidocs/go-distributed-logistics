@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # Database for Inventory Service
+  postgres-inventory:
+    image: postgres:16-alpine
+    container_name: postgres-inventory
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: inventory_db
+    ports:
+      - "5431:5432"
+    volumes:
+      - pg_inventory_data:/var/lib/postgresql/data
+
+  # Database for Logistics Service
+  postgres-logistics:
+    image: postgres:16-alpine
+    container_name: postgres-logistics
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: logistics_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - pg_logistics_data:/var/lib/postgresql/data
+
+  # Caching & Distributed Locks
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  # Go-native Message Broker with JetStream enabled
+  nats:
+    image: nats:2.10-alpine
+    container_name: nats
+    command: "-js" # Enable JetStream
+    ports:
+      - "4222:4222"
+      - "8222:8222" # HTTP monitoring port
+
+  # Distributed Tracing Collector & UI (Jaeger)
+  jaeger:
+    image: jaegertracing/all-in-one:1.57
+    container_name: jaeger
+    ports:
+      - "16686:16686" # Web UI
+      - "4317:4317"   # OTLP gRPC collector
+      - "4318:4318"   # OTLP HTTP collector
+
+  # Centralized Metrics Collector (Prometheus)
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: prometheus
+    volumes:
+      - ./docker/prometheus:/etc/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+    ports:
+      - "9090:9090"
+
+  # Centralized Log Aggregator (Loki)
+  loki:
+    image: grafana/loki:2.9.4
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+
+  # Visualization Dashboard (Grafana)
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+
+volumes:
+  pg_inventory_data:
+  pg_logistics_data:
+  redis_data:
